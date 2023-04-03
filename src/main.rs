@@ -1,8 +1,6 @@
 use email_newsletter::telemetry::{get_subscriber, init_subscriber};
 use email_newsletter::{configuration::get_configuration, startup::run};
-use secrecy::ExposeSecret;
 use sqlx::postgres::PgPoolOptions;
-use sqlx::PgPool;
 use std::net::TcpListener;
 
 #[tokio::main]
@@ -13,8 +11,7 @@ async fn main() -> std::io::Result<()> {
     let configuration = get_configuration().expect("Failed to read configuration.");
     let connection_pool = PgPoolOptions::new()
         .connect_timeout(std::time::Duration::from_secs(2))
-        .connect_lazy(&configuration.database.connection_string().expose_secret())
-        .unwrap();
+        .connect_lazy_with(configuration.database.with_db());
 
     let listener = TcpListener::bind(format!(
         "{}:{}",
