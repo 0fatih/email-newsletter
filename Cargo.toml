@@ -36,4 +36,5 @@ features = [
   "uuid",
   "chrono",
   "migrate",
+  "offline",
 ]
