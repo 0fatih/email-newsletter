@@ -1,3 +1,4 @@
+use email_newsletter::email_client::EmailClient;
 use email_newsletter::telemetry::{get_subscriber, init_subscriber};
 use email_newsletter::{configuration::get_configuration, startup::run};
 use sqlx::postgres::PgPoolOptions;
@@ -13,12 +14,24 @@ async fn main() -> std::io::Result<()> {
         .connect_timeout(std::time::Duration::from_secs(2))
         .connect_lazy_with(configuration.database.with_db());
 
-    let listener = TcpListener::bind(format!(
+    // Build an `EmailClient` using `configuration`
+    let sender_email = configuration
+        .email_client
+        .sender()
+        .expect("Invalid sender email address.");
+    let email_client = EmailClient::new(
+        configuration.email_client.base_url,
+        sender_email,
+        configuration.email_client.authorization_token,
+    );
+
+    let address = format!(
         "{}:{}",
         configuration.application.host, configuration.application.port
-    ))?;
+    );
 
-    run(listener, connection_pool)?.await?;
+    let listener = TcpListener::bind(address)?;
+    run(listener, connection_pool, email_client)?.await?;
 
     Ok(())
 }

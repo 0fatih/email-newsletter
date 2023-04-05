@@ -2,3 +2,4 @@
 
 .env
 configuration/base.yaml
+configuration/production.yaml
