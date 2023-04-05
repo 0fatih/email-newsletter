@@ -1,6 +1,6 @@
 use email_newsletter::{
     configuration::{get_configuration, DatabaseSettings},
-    email_client::{self, EmailClient},
+    email_client::EmailClient,
     telemetry::{get_subscriber, init_subscriber},
 };
 use once_cell::sync::Lazy;
