@@ -29,6 +29,7 @@ serde-aux = "3"
 unicode-segmentation = "1"
 claim = "0.5"
 validator = "0.14"
+rand = { version="0.8", features=["std_rng"] }
 
 [dev-dependencies]
 fake = "~2.3"
