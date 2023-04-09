@@ -1,3 +1,7 @@
 /target
 
+.env
+configuration/base.yaml
+configuration/local.yaml
+configuration/production.yaml
 .DS_Store
