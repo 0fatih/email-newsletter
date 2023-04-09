@@ -1,6 +1,5 @@
 /target
 
-.env
 configuration/base.yaml
 configuration/production.yaml
 configuration/local.yaml
