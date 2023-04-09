@@ -3,8 +3,8 @@ application:
 database:
   host: "localhost"
   port: 5432
-  username: "postgres"
-  password: "password"
+  username: "fatih"
+  password: "fatih123"
   database_name: "newsletter"
 email_client:
   base_url: "localhost"

@@ -1,7 +1,3 @@
 /target
 
-configuration/base.yaml
-configuration/production.yaml
-configuration/local.yaml
-
 .DS_Store
