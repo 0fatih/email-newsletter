@@ -6,7 +6,8 @@ use actix_web::http::header::{HeaderMap, HeaderValue};
 use actix_web::http::{header, StatusCode};
 use actix_web::{web, HttpRequest, HttpResponse, ResponseError};
 use anyhow::Context;
-use secrecy::Secret;
+use argon2::{Argon2, PasswordHash, PasswordVerifier};
+use secrecy::{ExposeSecret, Secret};
 use sqlx::PgPool;
 
 #[derive(serde::Deserialize)]
@@ -21,7 +22,7 @@ pub struct Content {
     text: String,
 }
 
-struct ConfirmedSubscriber {
+pub struct ConfirmedSubscriber {
     email: SubscriberEmail,
 }
 
@@ -60,13 +61,24 @@ impl ResponseError for PublishError {
     }
 }
 
+#[tracing::instrument(
+    name = "Publish a newsletter issue"
+    skip(body, pool, email_client, request)
+    fields(username=tracing::field::Empty, user_id=tracing::field::Empty)
+)]
 pub async fn publish_newsletter(
     body: web::Json<BodyData>,
     pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
     request: HttpRequest,
 ) -> Result<HttpResponse, PublishError> {
-    let _credentials = basic_authentication(request.headers()).map_err(PublishError::AuthError)?;
+    let credentials = basic_authentication(request.headers()).map_err(PublishError::AuthError)?;
+
+    tracing::Span::current().record("username", &tracing::field::display(&credentials.username));
+
+    let user_id = validate_credentials(credentials, &pool).await?;
+    tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
+
     let subscribers = get_confirmed_subscribers(&pool).await?;
 
     for subscriber in subscribers {
@@ -94,12 +106,12 @@ pub async fn publish_newsletter(
     Ok(HttpResponse::Ok().finish())
 }
 
-struct Credendtials {
+struct Credentials {
     username: String,
     password: Secret<String>,
 }
 
-fn basic_authentication(headers: &HeaderMap) -> Result<Credendtials, anyhow::Error> {
+fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Error> {
     let header_value = headers
         .get("Authorization")
         .context("The 'Authorization' header was missing")?
@@ -128,10 +140,45 @@ fn basic_authentication(headers: &HeaderMap) -> Result<Credendtials, anyhow::Err
         .ok_or_else(|| anyhow::anyhow!("A password must be provided in 'Basic' auth."))?
         .to_string();
 
-    Ok(Credendtials {
+    Ok(Credentials {
         username,
         password: Secret::new(password),
     })
+}
+
+async fn validate_credentials(
+    credentials: Credentials,
+    pool: &PgPool,
+) -> Result<uuid::Uuid, PublishError> {
+    let row: Option<_> = sqlx::query!(
+        r#"SELECT user_id, password_hash FROM users WHERE username = $1"#,
+        credentials.username
+    )
+    .fetch_optional(pool)
+    .await
+    .context("Failed to perform a query to retrieve stored credentials.")
+    .map_err(PublishError::UnexpectedError)?;
+
+    let (expected_password_hash, user_id) = match row {
+        Some(row) => (row.password_hash, row.user_id),
+        None => {
+            return Err(PublishError::AuthError(anyhow::anyhow!("Unknown username")));
+        }
+    };
+
+    let expected_password_hash = PasswordHash::new(&expected_password_hash)
+        .context("Failed to parse hash in PHC string format.")
+        .map_err(PublishError::UnexpectedError)?;
+
+    Argon2::default()
+        .verify_password(
+            credentials.password.expose_secret().as_bytes(),
+            &expected_password_hash,
+        )
+        .context("Invalid password.")
+        .map_err(PublishError::AuthError)?;
+
+    Ok(user_id)
 }
 
 #[tracing::instrument(name = "Get confirmed subscribers", skip(pool))]
