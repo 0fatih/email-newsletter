@@ -1,4 +1,5 @@
 use crate::configuration::DatabaseSettings;
+use crate::routes::{home, login, login_form};
 use crate::{configuration::Settings, email_client::EmailClient, routes::*};
 use actix_web::{dev::Server, web, App, HttpServer};
 use sqlx::postgres::PgPoolOptions;
@@ -79,6 +80,9 @@ pub fn run(
     let server = HttpServer::new(move || {
         App::new()
             .wrap(TracingLogger::default())
+            .route("/", web::get().to(home))
+            .route("/login", web::get().to(login_form))
+            .route("/login", web::post().to(login))
             .route("/health_check", web::get().to(health_check))
             .route("/subscriptions", web::post().to(subscribe))
             .route("/subscriptions/confirm", web::get().to(confirm))
